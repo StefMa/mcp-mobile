@@ -1,0 +1,80 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+
+      - name: Build with Gradle
+        run: ./gradlew build
+
+  integration-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+
+      - name: Publish to maven local
+        run: ./gradlew publishToMavenLocal
+
+      - name: Install ollama
+        run: curl -fsSL https://ollama.com/install.sh | sh
+
+      - name: Setup Ollama
+        run: |
+          ollama server &
+          ollama pull qwen3:0.6b
+
+      - name: Download mcp server sample and run it
+        run: |
+          git clone https://github.com/modelcontextprotocol/kotlin-sdk.git
+          cd kotlin-sdk
+          git checkout 0.5.0
+          cd samples/kotlin-mcp-server
+          ./gradlew build
+          java -jar build/libs/kotlin-mcp-server.jar &
+
+      - name: Build and run integration test
+        working-directory: sample/integ-test-ollama
+        run:
+          ./gradlew build
+          java -jar build/libs/integ-test-ollama.jar http://localhost:3001 'Call my tool please'
+          java -jar build/libs/integ-test-ollama.jar https://mcp-for-next-js.vercel.app 'Call my tool, you should echo "Hello World"'
+
+  build-samples:
+    strategy:
+      matrix:
+        sample: [android-ollama, cli-anthropic]
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+
+      - name: Publish to maven local
+        run: ./gradlew publishToMavenLocal
+
+      - name: Build with Gradle
+        working-directory: samples/${{ matrix.sample }}
+        run: ./gradlew build
