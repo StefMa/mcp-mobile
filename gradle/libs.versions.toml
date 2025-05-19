@@ -8,4 +8,4 @@ kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version = "2.
 kotlinxSerializationJson = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version = "1.8.1" }
 ktorClientCore = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
 ktorClientCio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor" }
-anthropic = { module = "com.anthropic:anthropic-java", version = "0.8.0" }
+anthropic = { module = "com.anthropic:anthropic-java", version = "1.4.0" }
