@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import guru.stefma.mcpmobile.provider.openai.OpenAI
 
 public class MCPMobile(
     name: String,
