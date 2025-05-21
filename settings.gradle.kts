@@ -9,6 +9,7 @@ include(
     "provider",
     "provider:anthropic",
     "provider:ollama",
+    "provider:gemini",
 )
 
 dependencyResolutionManagement {
