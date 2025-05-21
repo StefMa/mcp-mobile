@@ -17,6 +17,7 @@ Not all build-in providers are Kotlin Multiplatform ready yet.
 |-----------|-------------------|-------------------|
 | Ollama    | ✅                 | ✅                 |
 | Anthropic | ✅                 | ❌                 |
+| OpenAI    | ✅                 | ❌                 |
 
 ## Download
 
@@ -28,6 +29,8 @@ implementation("guru.stefma.mcpmobile:mcpmobile:$currentVersion")
 implementation("guru.stefma.mcpmobile:provider-anthropic:$currentVersion")
 // or
 implementation("guru.stefma.mcpmobile:provider-ollama:$currentVersion")
+// or
+implementation("guru.stefma.mcpmobile:provider-openai:$currentVersion")
 
 // or create your own provider
 implementation("guru.stefma.mcpmobile:provider:$currentVersion")
@@ -42,6 +45,11 @@ val anthropic = Anthropic(apiKey = "[API_KEY]")
 // or Ollama
 val ollama = Ollama(
     baseUrl = "[OllamaServerUrl]",
+    model = "[NameOfTheLLM]",
+)
+// or OpenAI
+val openai = OpenAI(
+    apiKey = "[API_KEY]",
     model = "[NameOfTheLLM]",
 )
 // or create your own provider
