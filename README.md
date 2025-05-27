@@ -6,17 +6,9 @@ Integrate easily MCP servers to your mobile applications.
 ## Supported platforms
 
 Right now only JVM/Android is supported.
-iOS support will follow, as soon as the upstream library, mcp/kotlin-sdk, supports it (
-see [issue](https://github.com/modelcontextprotocol/kotlin-sdk/pull/81)).
-
-### Providers
-
-Not all build-in providers are Kotlin Multiplatform ready yet.
-
-| Provider  | JVM/Android       | iOS               |
-|-----------|-------------------|-------------------|
-| Ollama    | ✅                 | ✅                 |
-| Anthropic | ✅                 | ❌                 |
+iOS support will follow, as soon as the upstream library,
+[modelcontextprotocol/kotlin-sdk[(https://github.com/modelcontextprotocol/kotlin-sdk),
+supports it (see [issue](https://github.com/modelcontextprotocol/kotlin-sdk/pull/81)).
 
 ## Download
 
@@ -38,12 +30,9 @@ implementation("guru.stefma.mcpmobile:provider:$currentVersion")
 ```kotlin
 // Create a provider instance
 // E.g. Anthropic
-val anthropic = Anthropic(apiKey = "[API_KEY]")
+val anthropic = Anthropic(apiKey = "[API_KEY]", model = "[MODEL_NAME]")
 // or Ollama
-val ollama = Ollama(
-    baseUrl = "[OllamaServerUrl]",
-    model = "[NameOfTheLLM]",
-)
+val ollama = Ollama(baseUrl = "[OllamaServerUrl]", model = "[NameOfTheLLM]")
 // or create your own provider
 val customProvider = object : Provider {
     override fun prepare(tools: List<Tool>) {
@@ -55,7 +44,7 @@ val customProvider = object : Provider {
         // Gets called when the user sends a message
         // returns a list of PromptResult
     }
-    override fun toolCallResultToMessage(toolCallResult: ToolCallResult): Message {
+    override fun toolCallResultToMessage(toolCall: PromptResult.ToolCall, toolCallResult: ToolCallResult): Message {
         // Converts the ToolCallResult to a Message
         // This is used when the provider receives a PromptResult.ToolCall
         // and needs to convert it to a Message
