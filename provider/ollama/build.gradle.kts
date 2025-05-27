@@ -9,9 +9,9 @@ kotlin {
             dependencies {
                 implementation(libs.ktorClientCore)
                 implementation(libs.ktorClientCio)
+                implementation(libs.kotlinxSerializationJson)
 
                 api(project(":provider"))
-                api(libs.kotlinxSerializationJson)
             }
         }
     }

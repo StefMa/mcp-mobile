@@ -48,10 +48,8 @@ public class MCPMobile(
                 urlString = mcpServerUrl,
             )
 
-            // Connect the MCP client to the server using the transport
             mcpClient.connect(transport)
 
-            // Request the list of available tools from the server
             toolsResult = mcpClient.listTools()
 
             provider.prepare(toolsResult?.tools?.asMcpMobileTools ?: emptyList())
@@ -63,7 +61,6 @@ public class MCPMobile(
     }
 
     public fun prompt(prompt: String) {
-        // Add the new message with the user's query
         messages.add(
             Message(
                 role = Message.Role.USER,
@@ -90,6 +87,13 @@ public class MCPMobile(
                     }
 
                     is PromptResult.ToolCall -> {
+                        messages.add(
+                            Message(
+                                role = Message.Role.ASSISTANT,
+                                content = result.rawMessage
+                            )
+                        )
+
                         val toolResultBase = mcpClient.callTool(
                             name = result.name,
                             arguments = result.arguments
@@ -105,9 +109,10 @@ public class MCPMobile(
                         }
 
                         val message = provider.toolCallResultToMessage(
-                            ToolCallResult(
+                            toolCall = result,
+                            toolCallResult = ToolCallResult(
                                 name = result.name,
-                                contents = toolResults
+                                contents = toolResults,
                             )
                         )
 

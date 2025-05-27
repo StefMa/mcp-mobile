@@ -5,5 +5,5 @@ public interface Provider {
 
     public fun prompt(messages: List<Message>): List<PromptResult>
 
-    public fun toolCallResultToMessage(toolCallResult: ToolCallResult): Message
+    public fun toolCallResultToMessage(toolCall: PromptResult.ToolCall, toolCallResult: ToolCallResult): Message
 }
