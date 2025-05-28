@@ -20,6 +20,8 @@ implementation("guru.stefma.mcpmobile:mcpmobile:$currentVersion")
 implementation("guru.stefma.mcpmobile:provider-anthropic:$currentVersion")
 // or
 implementation("guru.stefma.mcpmobile:provider-ollama:$currentVersion")
+// or
+implementation("guru.stefma.mcpmobile:provider-openai:$currentVersion")
 
 // or create your own provider
 implementation("guru.stefma.mcpmobile:provider:$currentVersion")
@@ -32,7 +34,9 @@ implementation("guru.stefma.mcpmobile:provider:$currentVersion")
 // E.g. Anthropic
 val anthropic = Anthropic(apiKey = "[API_KEY]", model = "[MODEL_NAME]")
 // or Ollama
-val ollama = Ollama(baseUrl = "[OllamaServerUrl]", model = "[NameOfTheLLM]")
+val ollama = Ollama(baseUrl = "[OLLAMA_SERVER_UL]", model = "[MODEL_NAME]")
+// or OpenAI
+val ollama = OpenAI(baseUrl = "[API_KEY]", model = "[MODEL_NAME]")
 // or create your own provider
 val customProvider = object : Provider {
     override fun prepare(tools: List<Tool>) {
@@ -53,9 +57,9 @@ val customProvider = object : Provider {
 
 // Then create a MCPMobile instance
 val mcpMobile = MCPMobile(
-    name = "[AName]",
-    version = "[Version]",
-    mcpServerUrl = "[UrlToYourMCPServer]",
+    name = "[MCP_CLIENT_NAME]",
+    version = "[MCP_CLIENT_VERSION]",
+    mcpServerUrl = "[URL_TO_MCP_SERVER]",
     provider = provider,
 )
 
