@@ -30,6 +30,7 @@ public class MCPMobile(
     version: String,
     private val mcpServerUrl: String,
     private val provider: Provider,
+    systemPrompt: String = "You are a helpful assistant. You can answer questions and call tools if needed.",
 ) : AutoCloseable {
 
     private val mcpClient: Client = Client(clientInfo = Implementation(name = name, version = version))
@@ -37,7 +38,14 @@ public class MCPMobile(
 
     private var toolsResult: ListToolsResult? = null
 
-    private val messages: MutableStateFlow<List<Message>> = MutableStateFlow(emptyList())
+    private val messages: MutableStateFlow<List<Message>> = MutableStateFlow(
+        listOf(
+            Message(
+                role = Message.Role.SYSTEM,
+                content = systemPrompt
+            )
+        )
+    )
 
     private val coroutineScope = CoroutineScope(Dispatchers.Default)
 
