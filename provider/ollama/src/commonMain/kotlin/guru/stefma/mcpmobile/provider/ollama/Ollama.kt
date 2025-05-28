@@ -48,12 +48,11 @@ public class Ollama(
         }
     }
 
-    override fun prompt(messages: List<Message>): List<PromptResult> {
-        return runBlocking {
-            val urlString = "$baseUrl/api/chat"
-            val response = HttpClient(CIO).post(urlString) {
-                contentType(ContentType.Application.Json)
-                val jsonString = """
+    override fun prompt(messages: List<Message>): List<PromptResult> = runBlocking {
+        val urlString = "$baseUrl/api/chat"
+        val response = HttpClient(CIO).post(urlString) {
+            contentType(ContentType.Application.Json)
+            val jsonString = """
                     {
                         "model": "$model",
                         "messages": ${messages.toJsonString(json)},
@@ -61,28 +60,31 @@ public class Ollama(
                         "tools": $tools
                     }
                     """
-                setBody(jsonString)
-            }
-            val responseBodyAsText = response.bodyAsText()
-            val ollamaResponse = json.decodeFromString<OllamaResponse>(responseBodyAsText)
-            if (!ollamaResponse.message.toolCalls.isNullOrEmpty()) {
-                return@runBlocking ollamaResponse.message.toolCalls.map {
-                    PromptResult.ToolCall(
-                        name = it.function.name,
-                        arguments = it.function.arguments
-                    )
-                }
-            }
-
-            return@runBlocking listOf(
-                PromptResult.Content(
-                    text = ollamaResponse.message.content,
-                )
-            )
+            setBody(jsonString)
         }
+        val responseBodyAsText = response.bodyAsText()
+        val ollamaResponse = json.decodeFromString<OllamaResponse>(responseBodyAsText)
+        if (!ollamaResponse.message.toolCalls.isNullOrEmpty()) {
+            return@runBlocking ollamaResponse.message.toolCalls.map {
+                PromptResult.ToolCall(
+                    name = it.function.name,
+                    arguments = it.function.arguments,
+                    rawMessage = json.encodeToString(ollamaResponse.message)
+                )
+            }
+        }
+
+        return@runBlocking listOf(
+            PromptResult.Content(
+                text = ollamaResponse.message.content,
+            )
+        )
     }
 
-    override fun toolCallResultToMessage(toolCallResult: ToolCallResult): Message {
+    override fun toolCallResultToMessage(
+        toolCall: PromptResult.ToolCall,
+        toolCallResult: ToolCallResult
+    ): Message {
         return Message(
             role = Message.Role.TOOL,
             content = toolCallResult.contents.joinToString(separator = ".")
