@@ -49,23 +49,15 @@ public class MCPMobile(
 
     private val coroutineScope = CoroutineScope(Dispatchers.Default)
 
-    public suspend fun connect(): Flow<List<Message>> {
-        try {
-            val transport = SseClientTransport(
-                client = sseHttpClient,
-                urlString = mcpServerUrl,
-            )
-
-            mcpClient.connect(transport)
-
-            toolsResult = mcpClient.listTools()
-
-            provider.prepare(toolsResult?.tools?.asMcpMobileTools ?: emptyList())
-        } catch (e: Exception) {
-            throw e
-        }
-
-        return messages
+    public fun connect(): Flow<List<Message>> = messages.onStart {
+        val transport = SseClientTransport(
+            client = sseHttpClient,
+            urlString = mcpServerUrl,
+        )
+        mcpClient.connect(transport)
+        toolsResult = mcpClient.listTools()
+        val mcpTools = toolsResult?.tools?.asMcpMobileTools ?: emptyList()
+        provider.prepare(mcpTools)
     }
 
     public fun prompt(prompt: String) {
