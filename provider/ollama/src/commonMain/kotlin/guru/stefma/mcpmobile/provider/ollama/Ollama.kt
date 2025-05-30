@@ -13,8 +13,6 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import kotlinx.coroutines.runBlocking
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 public class Ollama(
@@ -27,24 +25,22 @@ public class Ollama(
         ignoreUnknownKeys = true
     }
 
-    private lateinit var tools: String
+    private var tools: List<OllamaTool>? = null
 
     override fun prepare(tools: List<Tool>) {
-        this.tools = tools.joinToString(separator = ",", prefix = "[", postfix = "]") { tool ->
-            """
-            {
-                "type": "function",
-                "function": {
-                    "name": "${tool.name}",
-                    "description": "${tool.description}",
-                    "parameters": {
-                        "type": "${tool.inputSchema.type}",
-                        "properties": ${tool.inputSchema.properties},
-                        "required": ${tool.inputSchema.required?.joinToString(separator = ",", prefix = "[", postfix = "]") { "\"$it\"" } ?: "[]"}
-                    }
-                }
-            }
-            """.trimIndent()
+        this.tools = tools.map {
+            OllamaTool(
+                type = "function",
+                function = OllamaTool.FunctionDetail(
+                    name = it.name,
+                    description = it.description,
+                    parameters = OllamaTool.FunctionDetail.Parameters(
+                        type = it.inputSchema.type,
+                        properties = it.inputSchema.properties,
+                        required = it.inputSchema.required
+                    )
+                )
+            )
         }
     }
 
@@ -52,16 +48,21 @@ public class Ollama(
         val urlString = "$baseUrl/api/chat"
         val response = HttpClient(CIO).post(urlString) {
             contentType(ContentType.Application.Json)
-            val jsonString = """
-                    {
-                        "model": "$model",
-                        "messages": ${messages.toJsonString(json)},
-                        "stream": false,
-                        "tools": $tools
-                    }
-                    """
-            setBody(jsonString)
+            val request = OllamaRequest(
+                model = model,
+                messages = messages.map {
+                    OllamaRequest.Message(
+                        role = it.role.toString().lowercase(),
+                        content = it.content
+                    )
+                },
+                stream = false,
+                tools = tools
+            )
+            val json = json.encodeToString(request)
+            setBody(json)
         }
+
         val responseBodyAsText = response.bodyAsText()
         val ollamaResponse = json.decodeFromString<OllamaResponse>(responseBodyAsText)
         if (!ollamaResponse.message.toolCalls.isNullOrEmpty()) {
@@ -87,37 +88,7 @@ public class Ollama(
     ): Message {
         return Message(
             role = Message.Role.TOOL,
-            content = toolCallResult.contents.joinToString(separator = ".")
+            content = toolCallResult.contents.joinToString(separator = "\n")
         )
     }
 }
-
-private fun List<Message>.toJsonString(json: Json): String {
-    return joinToString(separator = ",", prefix = "[", postfix = "]") { message ->
-        """{"role": "${message.role}","content": ${json.encodeToString(message.content)}}""".trimIndent()
-    }
-}
-
-@Serializable
-private data class OllamaResponse(
-    val message: OllamaMessage,
-)
-
-@Serializable
-private data class OllamaMessage(
-    val role: String,
-    val content: String,
-    @SerialName("tool_calls")
-    val toolCalls: List<ToolCall>? = null,
-)
-
-@Serializable
-private data class ToolCall(
-    val function: Function,
-)
-
-@Serializable
-private data class Function(
-    val name: String,
-    val arguments: Map<String, String>,
-)

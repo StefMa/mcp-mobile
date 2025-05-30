@@ -14,7 +14,6 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import kotlinx.coroutines.runBlocking
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 public class Anthropic(
@@ -27,27 +26,19 @@ public class Anthropic(
         ignoreUnknownKeys = true
     }
 
-    private var tools: String? = null
+    private var tools: List<AnthropicTool>? = null
 
     override fun prepare(tools: List<Tool>) {
-        this.tools = tools.joinToString(separator = ",", prefix = "[", postfix = "]") { tool ->
-            """
-            {
-                "name": "${tool.name}",
-                "description": "${tool.description}",
-                "input_schema": {
-                    "type": "${tool.inputSchema.type}",
-                    "properties": ${tool.inputSchema.properties},
-                    "required": ${
-                tool.inputSchema.required?.joinToString(
-                    separator = ",",
-                    prefix = "[",
-                    postfix = "]"
-                ) { "\"$it\"" } ?: "[]"
-            }
-                }
-            }
-            """.trimIndent()
+        this.tools = tools.map {
+            AnthropicTool(
+                name = it.name,
+                description = it.description,
+                inputSchema = AnthropicTool.InputSchema(
+                    type = it.inputSchema.type,
+                    properties = it.inputSchema.properties,
+                    required = it.inputSchema.required
+                )
+            )
         }
     }
 
@@ -57,16 +48,22 @@ public class Anthropic(
             contentType(ContentType.Application.Json)
             header("x-api-key", apiKey)
             header("anthropic-version", "2023-06-01")
-            val jsonString = """
-                    {
-                        "model": "$model",
-                        "messages": ${messages.toJsonString(json)},
-                        "max_tokens": 1024,
-                        "tools": $tools
-                    }
-                    """
-            setBody(jsonString)
+            val request = AnthropicRequest(
+                model = model,
+                maxTokens = 1024,
+                messages = messages.filter { it.role != Message.Role.SYSTEM }.map {
+                    AnthropicRequest.Message(
+                        role = it.role.toAnthropicRole(),
+                        content = it.content
+                    )
+                },
+                system = messages.find { it.role == Message.Role.SYSTEM }?.content,
+                tools = tools,
+            )
+            val json = json.encodeToString(request)
+            setBody(json)
         }
+
         val responseBodyAsText = response.bodyAsText()
         val anthropicResponse = json.decodeFromString<AnthropicResponse>(responseBodyAsText)
         anthropicResponse.content.map {
@@ -89,7 +86,7 @@ public class Anthropic(
     override fun toolCallResultToMessage(toolCall: PromptResult.ToolCall, toolCallResult: ToolCallResult): Message {
         val id = json.decodeFromString<AnthropicResponse>(toolCall.rawMessage).id
         return Message(
-            role = Message.Role.USER,
+            role = Message.Role.TOOL,
             content = """
                 {
                     "type": "tool_result",
@@ -101,26 +98,11 @@ public class Anthropic(
     }
 }
 
-private fun List<Message>.toJsonString(json: Json): String {
-    return joinToString(separator = ",", prefix = "[", postfix = "]") { message ->
-        """{"role": "${message.role.name.lowercase()}","content": ${json.encodeToString(message.content)}}""".trimIndent()
+private fun Message.Role.toAnthropicRole(): String {
+    return when (this) {
+        Message.Role.USER -> "user"
+        Message.Role.ASSISTANT -> "assistant"
+        Message.Role.TOOL -> "user"
+        Message.Role.SYSTEM -> error("No system role in Anthropic")
     }
 }
-
-@Serializable
-private data class AnthropicResponse(
-    val id: String,
-    val role: String,
-    val content: List<AnthropicContent>,
-)
-
-@Serializable
-private data class AnthropicContent(
-    val type: String,
-    val text: String?,
-
-    // This is for tool use responses
-    val id: String?,
-    val name: String?,
-    val input: Map<String, String>?,
-)

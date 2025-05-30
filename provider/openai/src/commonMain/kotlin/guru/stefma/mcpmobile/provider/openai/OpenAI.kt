@@ -14,9 +14,10 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import kotlinx.coroutines.runBlocking
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.modules.SerializersModule
+import kotlinx.serialization.modules.polymorphic
+import kotlinx.serialization.modules.subclass
 
 public class OpenAI(
     private val apiKey: String,
@@ -26,137 +27,128 @@ public class OpenAI(
     private val json = Json {
         explicitNulls = false
         ignoreUnknownKeys = true
+        serializersModule = SerializersModule {
+            polymorphic(OpenAIRequestMessage::class) {
+                subclass(OpenAIDefaultMessage::class)
+                subclass(OpenAIToolResultMessage::class)
+                subclass(OpenAIResponse.Choice.Message::class)
+            }
+        }
     }
 
-    private var tools: String? = null
+    private var tools: List<OpenAITool>? = null
 
     override fun prepare(tools: List<Tool>) {
-        this.tools = tools.joinToString(separator = ",", prefix = "[", postfix = "]") { tool ->
-            """
-            {
-                "type": "function",
-                "function": {
-                    "name": "${tool.name}",
-                    "description": "${tool.description}",
-                    "parameters": {
-                        "type": "${tool.inputSchema.type}",
-                        "properties": ${tool.inputSchema.properties},
-                        "required": ${tool.inputSchema.required.toJsonString()}
-                    }
-                }
-            }
-            """.trimIndent()
+        this.tools = tools.map {
+            OpenAITool(
+                type = "function",
+                function = OpenAITool.Function(
+                    name = it.name,
+                    description = it.description,
+                    parameters = OpenAITool.Function.Parameters(
+                        type = it.inputSchema.type,
+                        properties = it.inputSchema.properties,
+                        required = it.inputSchema.required
+                    )
+                )
+            )
         }
     }
 
-    override fun prompt(messages: List<Message>): List<PromptResult> {
-        return runBlocking {
-            val urlString = "https://api.openai.com/v1/chat/completions"
-            val response = HttpClient(CIO).post(urlString) {
-                contentType(ContentType.Application.Json)
-                headers {
-                    append("Authorization", "Bearer $apiKey")
-                    append("Content-Type", "application/json")
-                }
-                val jsonString = """
-                    {
-                        "model": "$model",
-                        "messages": ${messages.toJsonString(json)}
-                        ${if (tools != null) ",\"tools\": $tools" else ""}
-                    }
-                    """.trimIndent().trim()
-                setBody(jsonString)
+    override fun prompt(messages: List<Message>): List<PromptResult> = runBlocking {
+        val urlString = "https://api.openai.com/v1/chat/completions"
+        val response = HttpClient(CIO).post(urlString) {
+            contentType(ContentType.Application.Json)
+            headers {
+                append("Authorization", "Bearer $apiKey")
+                append("Content-Type", "application/json")
             }
-            val responseBodyAsText = response.bodyAsText()
-            val openAIResponse = json.decodeFromString<OpenAIResponse>(responseBodyAsText)
-            val tools = openAIResponse.choices.filter { it.message.toolCalls?.isNotEmpty() ?: false }
-                .map { choice ->
-                    choice.message.toolCalls!!.map { toolCall ->
-                        val arguments = json.decodeFromString<Map<String, String>>(toolCall.function.arguments)
-                        PromptResult.ToolCall(
-                            name = toolCall.function.name,
-                            arguments = arguments,
-                            rawMessage = json.encodeToString(choice.message)
-                        )
-                    }
-                }
-                .flatten()
-            val openAIMessage = openAIResponse.choices.filter { it.message.toolCalls?.isEmpty() ?: true }
-                .map {
-                    PromptResult.Content(
-                        text = it.message.content!!,
+            val request = OpenAIRequest(
+                model = model,
+                messages = messages.toOpenAIMessage(json),
+                tools = tools
+            )
+            val json = json.encodeToString(request)
+            setBody(json)
+        }
+
+        val responseBodyAsText = response.bodyAsText()
+        val openAIResponse = json.decodeFromString<OpenAIResponse>(responseBodyAsText)
+        val tools = openAIResponse.choices.filter { it.message.toolCalls?.isNotEmpty() ?: false }
+            .map { choice ->
+                choice.message.toolCalls!!.map { toolCall ->
+                    val arguments = json.decodeFromString<Map<String, String>>(toolCall.function.arguments)
+                    PromptResult.ToolCall(
+                        name = toolCall.function.name,
+                        arguments = arguments,
+                        rawMessage = json.encodeToString(choice.message)
                     )
                 }
+            }
+            .flatten()
+        val openAIMessage = openAIResponse.choices.filter { it.message.toolCalls?.isEmpty() ?: true }
+            .map {
+                PromptResult.Content(
+                    text = it.message.content!!,
+                )
+            }
 
-            return@runBlocking tools + openAIMessage
-        }
+        return@runBlocking tools + openAIMessage
     }
 
     override fun toolCallResultToMessage(toolCall: PromptResult.ToolCall, toolCallResult: ToolCallResult): Message {
-        val id = json.decodeFromString<OpenAIMessage>(toolCall.rawMessage).toolCalls!![0].id
+        val id = json.decodeFromString<OpenAIResponse.Choice.Message>(toolCall.rawMessage).toolCalls!![0].id
         return Message(
             role = Message.Role.TOOL,
-            content = """
-                {
-                    "role": "tool",
-                    "tool_call_id": "$id",
-                    "content": "${toolCallResult.contents.joinToString(separator = "\n")}"
-                }
-            """.trimIndent()
+            content = json.encodeToString(
+                OpenAIToolResultMessage(
+                    role = "tool",
+                    toolCallId = id,
+                    content = toolCallResult.contents.joinToString(separator = "\n")
+                )
+            )
         )
     }
 }
 
-private fun List<String>?.toJsonString(): String {
-    return this?.joinToString(separator = ",", prefix = "[", postfix = "]") { "\"$it\"" } ?: "[]"
-}
+private fun List<Message>.toOpenAIMessage(json: Json): List<OpenAIRequestMessage> = map { message ->
+    when (message.role) {
+        Message.Role.USER -> OpenAIDefaultMessage(
+            role = message.role.name.lowercase(),
+            content = json.encodeToString(message.content)
+        )
 
-private fun List<Message>.toJsonString(json: Json): String {
-    return joinToString(separator = ",", prefix = "[", postfix = "]") { message ->
-        when {
-            // This is the message from the LLM saying we should call a tool
-            // This is the `rawMessage` in the PromptResult.ToolCall
-            message.content.contains("tool_calls") -> {
-                message.content
+        Message.Role.SYSTEM -> OpenAIDefaultMessage(
+            role = message.role.name.lowercase(),
+            content = json.encodeToString(message.content)
+        )
+
+        Message.Role.ASSISTANT -> {
+            try {
+                // This is the message from the LLM saying we should call a tool
+                // This is the `rawMessage` in the PromptResult.ToolCall
+                val rawMessageResponse = json.decodeFromString<OpenAIResponse.Choice.Message>(message.content)
+                return@map rawMessageResponse
+            } catch (e: IllegalArgumentException) {
+                // Ignore the exception
+                // Fallback to default message
+                OpenAIDefaultMessage(
+                    role = message.role.name.lowercase(),
+                    content = json.encodeToString(message.content)
+                )
             }
+        }
 
-            // This is the message from us to the LLM saying we called the tool
-            // See `toolCallResultToMessage`.
-            message.content.contains("tool_call_id") -> {
-                message.content
+        Message.Role.TOOL -> {
+            try {
+                // This is the message from us to the LLM saying we called the tool
+                // See `toolCallResultToMessage`.
+                val toolResultMessage = json.decodeFromString<OpenAIToolResultMessage>(message.content)
+                return@map toolResultMessage
+            } catch (e: IllegalArgumentException) {
+                // Ignore the exception
+                error("Failed to decode OpenAIToolResultMessage from content: ${message.content}")
             }
-
-            else -> """{"role": "${message.role.name.lowercase()}","content": ${json.encodeToString(message.content)}}""".trimIndent()
         }
     }
 }
-
-@Serializable
-private data class OpenAIResponse(
-    val choices: List<OpenAIChoice>,
-)
-
-@Serializable
-private data class OpenAIChoice(
-    val message: OpenAIMessage,
-)
-
-@Serializable
-private data class OpenAIMessage(
-    val role: String,
-    val content: String?,
-    @SerialName("tool_calls") val toolCalls: List<ToolCall>?,
-)
-
-@Serializable
-private data class ToolCall(
-    val id: String,
-    val type: String,
-    val function: Function,
-)
-
-@Serializable
-private data class Function(
-    val name: String,
-    val arguments: String,
-)
