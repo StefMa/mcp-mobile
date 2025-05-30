@@ -61,11 +61,15 @@ jobs:
 
       - name: Run on local mcp server
         working-directory: samples/integ-test-ollama
-        run: java -jar build/libs/integ-test-ollama.jar http://localhost:3001 'Call my tool named kotlin-sdk-tool pelase /nothink'
+        run: |
+          set -e
+          java -jar build/libs/integ-test-ollama.jar http://localhost:3001 'Call my tool named kotlin-sdk-tool pelase /nothink'
 
       - name: Run on remote mcp server
         working-directory: samples/integ-test-ollama
-        run: java -jar build/libs/integ-test-ollama.jar https://mcp-for-next-js.vercel.app 'Call my tool, you should echo "Hello World" /nothink'
+        run: |
+          set -e
+          java -jar build/libs/integ-test-ollama.jar https://mcp-for-next-js.vercel.app 'Call my tool, you should echo "Hello World" /nothink'
 
   build-samples:
     strategy:
