@@ -2,7 +2,7 @@
 ktor = "3.0.2"
 
 [plugins]
-kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version = "2.1.21" }
+kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version = "2.2.21" }
 
 [libraries]
 kotlinxSerializationJson = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version = "1.8.1" }
