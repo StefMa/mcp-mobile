@@ -14,7 +14,7 @@ kotlin {
     sourceSets {
         val commonMain by getting {
             dependencies {
-                implementation("io.modelcontextprotocol:kotlin-sdk:0.5.0")
+                implementation("io.modelcontextprotocol:kotlin-sdk:0.7.4")
                 implementation(project(":provider"))
             }
         }
